@@ -16,7 +16,7 @@ PLIST_LABEL="com.company.mac-agent"
 PLIST_PATH="/Library/LaunchDaemons/${PLIST_LABEL}.plist"
 
 # Agent binary URL (override with AGENT_JS_URL when curling)
-AGENT_JS_URL="${AGENT_JS_URL:-https://raw.githubusercontent.com/batmunkh0612/mac-fleet-agent/main/dist/agent.js}"
+AGENT_JS_URL="${AGENT_JS_URL:-https://raw.githubusercontent.com/batmunkh0612/mac-fleet-agent/main/agent.js}"
 
 if [ "$EUID" -ne 0 ]; then
   echo "Run with: curl -fsSL <url>/install.sh | sudo bash"
