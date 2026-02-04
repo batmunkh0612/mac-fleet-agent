@@ -1,14 +1,13 @@
 #!/bin/bash
 # Mac Fleet Agent - One-line install (curl -fsSL URL | sudo bash)
-# Set API_BASE_URL, REDIS_URL, REDIS_TOKEN (and optionally AGENT_JS_URL) before piping.
+# Edit the 3 variables below for your fleet (env vars still override).
 
 set -e
 
 # Configuration
-API_BASE_URL="https://a33c262c-enrollment-service-v2-test.shagai.workers.dev"
-REDIS_URL="https://intense-elephant-31650.upstash.io"
-REDIS_TOKEN="AXuiAAIncDIxOWI4YjU1ZWZlMzM0NGJiOWY2OTg3NDM4OTkyMDkyNHAyMzE2NTA"
-GITHUB_RAW="https://raw.githubusercontent.com/batmunkh0612/mac-fleet-agent/main"
+API_BASE_URL="${API_BASE_URL:-https://enrollment-service-v2-test.shagai.workers.dev}"
+REDIS_URL="${REDIS_URL:-https://intense-elephant-31650.upstash.io}"
+REDIS_TOKEN="${REDIS_TOKEN:-AXuiAAIncDIxOWI4YjU1ZWZlMzM0NGJiOWY2OTg3NDM4OTkyMDkyNHAyMzE2NTA}"
 
 INSTALL_DIR="/usr/local/mac-fleet-agent"
 CONFIG_DIR="/etc/mac-fleet-agent"
@@ -21,7 +20,6 @@ AGENT_JS_URL="${AGENT_JS_URL:-https://raw.githubusercontent.com/batmunkh0612/mac
 
 if [ "$EUID" -ne 0 ]; then
   echo "Run with: curl -fsSL <url>/install.sh | sudo bash"
-  echo "Set fleet server and Redis: sudo API_BASE_URL=... REDIS_URL=... REDIS_TOKEN=... bash -s" 
   exit 1
 fi
 
@@ -29,11 +27,6 @@ SERIAL=$(ioreg -l | grep IOPlatformSerialNumber | awk -F'"' '{print $4}')
 HOSTNAME=$(hostname -s)
 echo "=== Mac Fleet Agent ==="
 echo "Serial: $SERIAL  Hostname: $HOSTNAME"
-
-if [ -z "$API_BASE_URL" ] || [ -z "$REDIS_URL" ] || [ -z "$REDIS_TOKEN" ]; then
-  echo "Error: Set API_BASE_URL, REDIS_URL, REDIS_TOKEN (e.g. sudo API_BASE_URL=... REDIS_URL=... REDIS_TOKEN=... bash -s)"
-  exit 1
-fi
 
 if ! command -v node &>/dev/null; then
   echo "Installing Node.js via Homebrew..."
