@@ -9,7 +9,7 @@ API_BASE_URL="https://enrollment-service-v2-test.shagai.workers.dev"
 REDIS_URL="https://intense-elephant-31650.upstash.io"
 REDIS_TOKEN="AXuiAAIncDIxOWI4YjU1ZWZlMzM0NGJiOWY2OTg3NDM4OTkyMDkyNHAyMzE2NTA"
 
-INSTALL_DIR="/usr/localIS_TOK/mac-fleet-agent"
+INSTALL_DIR="/usr/local/mac-fleet-agent"
 CONFIG_DIR="/etc/mac-fleet-agent"
 LOG_FILE="/var/log/mac-fleet-agent.log"
 PLIST_LABEL="com.company.mac-agent"
