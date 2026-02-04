@@ -23,32 +23,107 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // src/index.ts
+var import_child_process2 = require("child_process");
+var fs2 = __toESM(require("fs"));
+var path2 = __toESM(require("path"));
+
+// src/self-update.ts
 var import_child_process = require("child_process");
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
+var LAUNCHCTL_LABEL = "com.company.mac-agent";
+var isManifest = (body) => {
+  const t = body.trim();
+  return t.startsWith("{") && (t.includes('"url"') || t.includes('"version"'));
+};
+var fetchUpdatePayload = async (updateUrl) => {
+  const res = await fetch(updateUrl, { method: "GET" });
+  if (!res.ok)
+    throw new Error(`Update fetch: ${res.status}`);
+  const body = await res.text();
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json") || isManifest(body)) {
+    const json = JSON.parse(body);
+    if (json.url) {
+      const r2 = await fetch(json.url, { method: "GET" });
+      if (!r2.ok)
+        throw new Error(`Update download: ${r2.status}`);
+      return r2.text();
+    }
+  }
+  return body;
+};
+var checkAndApplyUpdate = async (options) => {
+  const { agentUpdateUrl, log: log2, getInstallDir: getInstallDir2, launchdLabel = LAUNCHCTL_LABEL } = options;
+  if (!agentUpdateUrl || !agentUpdateUrl.startsWith("http"))
+    return false;
+  const installDir = getInstallDir2();
+  const currentPath = path.join(installDir, "agent.js");
+  const newPath = path.join(installDir, "agent.js.new");
+  if (!fs.existsSync(currentPath))
+    return false;
+  let newBody;
+  try {
+    newBody = await fetchUpdatePayload(agentUpdateUrl);
+  } catch (err) {
+    log2(`Update check failed: ${err}`);
+    return false;
+  }
+  try {
+    fs.writeFileSync(newPath, newBody, "utf-8");
+  } catch (err) {
+    log2(`Update write failed: ${err}`);
+    return false;
+  }
+  const currentStat = fs.statSync(currentPath);
+  const newStat = fs.statSync(newPath);
+  if (currentStat.size === newStat.size) {
+    try {
+      fs.unlinkSync(newPath);
+    } catch {
+    }
+    return false;
+  }
+  log2("Applying update and restarting");
+  const scriptPath = path.join("/tmp", `mac-agent-updater-${process.pid}.sh`);
+  const escapeSh = (s) => s.replace(/'/g, "'\\''");
+  const oldPath = path.join(installDir, "agent.js.old");
+  const script = [
+    "#!/bin/bash",
+    "sleep 2",
+    `mv '${escapeSh(currentPath)}' '${escapeSh(oldPath)}'`,
+    `mv '${escapeSh(newPath)}' '${escapeSh(currentPath)}'`,
+    `launchctl kick -k -p ${launchdLabel}`
+  ].join("\n");
+  fs.writeFileSync(scriptPath, script, { mode: 493 });
+  (0, import_child_process.spawn)("sh", [scriptPath], { detached: true, stdio: "ignore" }).unref();
+  return true;
+};
+
+// src/index.ts
 var getDefaultConfigDir = () => {
   const home = process.env.HOME || "/tmp";
-  return path.join(home, ".mac-fleet-agent");
+  return path2.join(home, ".mac-fleet-agent");
 };
 var CONFIG_PATH = "";
 var LOG_PATH = "";
 var EXECUTED_PATH = "";
 var initPaths = () => {
   const envConfig = process.env.MAC_AGENT_CONFIG || process.env.CONFIG_PATH;
-  const cwdConfig = path.join(process.cwd(), "config", "mac-agent.json");
-  const defaultConfig = path.join(getDefaultConfigDir(), "mac-agent.json");
+  const cwdConfig = path2.join(process.cwd(), "config", "mac-agent.json");
+  const defaultConfig = path2.join(getDefaultConfigDir(), "mac-agent.json");
   if (envConfig) {
-    CONFIG_PATH = path.resolve(envConfig);
-  } else if (fs.existsSync(cwdConfig)) {
+    CONFIG_PATH = path2.resolve(envConfig);
+  } else if (fs2.existsSync(cwdConfig)) {
     CONFIG_PATH = cwdConfig;
   } else {
     CONFIG_PATH = defaultConfig;
   }
-  const stateDir = path.dirname(CONFIG_PATH);
-  LOG_PATH = path.join(stateDir, "mac-agent.log");
-  EXECUTED_PATH = path.join(stateDir, "executed.json");
-  if (!fs.existsSync(stateDir)) {
-    fs.mkdirSync(stateDir, { recursive: true });
+  const stateDir = path2.dirname(CONFIG_PATH);
+  LOG_PATH = path2.join(stateDir, "mac-agent.log");
+  EXECUTED_PATH = path2.join(stateDir, "executed.json");
+  if (!fs2.existsSync(stateDir)) {
+    fs2.mkdirSync(stateDir, { recursive: true });
   }
 };
 var STREAM_PREFIX = "cmd:stream:";
@@ -60,7 +135,7 @@ var serialNumber;
 var executedCommands = {};
 var getSerialNumber = () => {
   try {
-    const output = (0, import_child_process.execSync)(
+    const output = (0, import_child_process2.execSync)(
       `ioreg -l | grep IOPlatformSerialNumber | awk -F'"' '{print $4}'`,
       { encoding: "utf-8" }
     );
@@ -75,42 +150,43 @@ var log = (message) => {
 `;
   process.stdout.write(line);
   try {
-    fs.appendFileSync(LOG_PATH, line);
+    fs2.appendFileSync(LOG_PATH, line);
   } catch {
   }
 };
 var rotateLogIfNeeded = () => {
   try {
-    const stats = fs.statSync(LOG_PATH);
+    const stats = fs2.statSync(LOG_PATH);
     if (stats.size > MAX_LOG_SIZE) {
-      fs.renameSync(LOG_PATH, `${LOG_PATH}.old`);
+      fs2.renameSync(LOG_PATH, `${LOG_PATH}.old`);
     }
   } catch {
   }
 };
 var loadConfig = () => {
-  const data = fs.readFileSync(CONFIG_PATH, "utf-8");
+  const data = fs2.readFileSync(CONFIG_PATH, "utf-8");
   const cfg = JSON.parse(data);
   if (!cfg.apiBaseUrl || !cfg.redisUrl || !cfg.redisToken) {
     throw new Error("Missing required config: apiBaseUrl, redisUrl, redisToken");
   }
   cfg.pollIntervalMs = cfg.pollIntervalMs || 5e3;
+  cfg.updateCheckIntervalMs = cfg.updateCheckIntervalMs ?? 0;
   return cfg;
 };
 var loadExecutedCommands = () => {
   try {
-    const data = fs.readFileSync(EXECUTED_PATH, "utf-8");
+    const data = fs2.readFileSync(EXECUTED_PATH, "utf-8");
     executedCommands = JSON.parse(data);
   } catch {
     executedCommands = {};
   }
 };
 var saveExecutedCommands = () => {
-  const dir = path.dirname(EXECUTED_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  const dir = path2.dirname(EXECUTED_PATH);
+  if (!fs2.existsSync(dir)) {
+    fs2.mkdirSync(dir, { recursive: true });
   }
-  fs.writeFileSync(EXECUTED_PATH, JSON.stringify(executedCommands, null, 2));
+  fs2.writeFileSync(EXECUTED_PATH, JSON.stringify(executedCommands, null, 2));
 };
 var isCommandExecuted = (cmdId) => cmdId in executedCommands;
 var markCommandExecuted = (cmdId) => {
@@ -130,6 +206,17 @@ var redisExecute = async (command) => {
     throw new Error(`Redis error: ${response.status}`);
   }
   return response.json();
+};
+var checkRedisConnection = async () => {
+  try {
+    const response = await redisExecute(["PING"]);
+    const pong = response?.result === "PONG";
+    log(pong ? "Redis: connection up" : `Redis: unexpected response ${JSON.stringify(response)}`);
+    return pong;
+  } catch (error) {
+    log(`Redis: connection down - ${error}`);
+    return false;
+  }
 };
 var initConsumerGroup = async () => {
   try {
@@ -208,7 +295,7 @@ var executeScript = (script, argsJson, timeoutSec) => {
   return new Promise((resolve2) => {
     const tmpPath = `/tmp/fleet-cmd-${Date.now()}.sh`;
     try {
-      fs.writeFileSync(tmpPath, script, { mode: 493 });
+      fs2.writeFileSync(tmpPath, script, { mode: 493 });
     } catch (err) {
       resolve2({ stdout: "", stderr: `Failed to write script: ${err}`, exitCode: 1 });
       return;
@@ -218,7 +305,7 @@ var executeScript = (script, argsJson, timeoutSec) => {
     for (const [key, value] of Object.entries(args)) {
       env[`ARG_${key}`] = value;
     }
-    const proc = (0, import_child_process.spawn)("/bin/bash", [tmpPath], {
+    const proc = (0, import_child_process2.spawn)("/bin/bash", [tmpPath], {
       env,
       timeout: timeoutSec * 1e3
     });
@@ -232,7 +319,7 @@ var executeScript = (script, argsJson, timeoutSec) => {
     });
     proc.on("close", (code) => {
       try {
-        fs.unlinkSync(tmpPath);
+        fs2.unlinkSync(tmpPath);
       } catch {
       }
       resolve2({
@@ -243,7 +330,7 @@ var executeScript = (script, argsJson, timeoutSec) => {
     });
     proc.on("error", (error) => {
       try {
-        fs.unlinkSync(tmpPath);
+        fs2.unlinkSync(tmpPath);
       } catch {
       }
       resolve2({ stdout: "", stderr: error.message, exitCode: 1 });
@@ -305,13 +392,27 @@ var processCommand = async (cmd) => {
   await ackCommand(cmd.messageId);
   log(`Command ${cmd.cmdId} completed (exit: ${exitCode}, duration: ${duration}ms)`);
 };
+var getInstallDir = () => path2.dirname(process.argv[1] || process.cwd());
 var pollLoop = async () => {
   let backoff = config.pollIntervalMs;
   const maxBackoff = 6e4;
+  let lastUpdateCheck = 0;
   while (true) {
     try {
       const commands = await readCommands();
       backoff = config.pollIntervalMs;
+      const interval = config.updateCheckIntervalMs ?? 0;
+      if (config.agentUpdateUrl && interval > 0 && Date.now() - lastUpdateCheck >= interval) {
+        lastUpdateCheck = Date.now();
+        const updated = await checkAndApplyUpdate({
+          agentUpdateUrl: config.agentUpdateUrl,
+          log,
+          getInstallDir,
+          launchdLabel: config.launchdLabel
+        });
+        if (updated)
+          process.exit(0);
+      }
       for (const cmd of commands) {
         await processCommand(cmd);
       }
@@ -341,8 +442,22 @@ var main = async () => {
       log("Shutdown");
       process.exit(0);
     });
+    const redisUp = await checkRedisConnection();
+    if (!redisUp) {
+      log("Starting anyway; will retry Redis on each poll.");
+    }
     await initConsumerGroup();
     log(`Listening on stream: ${getStreamName()}`);
+    if (config.agentUpdateUrl) {
+      const updated = await checkAndApplyUpdate({
+        agentUpdateUrl: config.agentUpdateUrl,
+        log,
+        getInstallDir,
+        launchdLabel: config.launchdLabel
+      });
+      if (updated)
+        process.exit(0);
+    }
     await pollLoop();
   } catch (error) {
     console.error(`Fatal error: ${error}`);
